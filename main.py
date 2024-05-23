@@ -1,8 +1,10 @@
 from typing import Final
 import os
 from dotenv import load_dotenv
-from discord import Intents, Client, Message, app_commands
+from discord import Intents, Client, Message, app_commands, utils
 import random
+import asyncio
+from difflib import SequenceMatcher
 
 load_dotenv()
 TOKEN: Final[str] = os.getenv('DISCORD_TOKEN')
@@ -11,6 +13,9 @@ intents: Intents = Intents.default()
 intents.message_content = True
 client: Client = Client(intents=intents)
 tree = app_commands.CommandTree(client)
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
 
 async def send_message(message, user_message):
     if not user_message:
@@ -27,27 +32,10 @@ async def send_message(message, user_message):
 async def on_ready():
     print("now running")
 
-# Add the guild ids in which the slash command will appear.
-# If it should be in all, remove the argument, but note that
-# it will take some time (up to an hour) to register the
-# command if it's for all guilds.
-@tree.command(
-    name="scan",
-    description="My first application Command",
-)
-async def first_command(interaction):
 
-    messages = [message async for message in interaction.channel.history(limit=100)]
-    index = random.randrange(0, len(messages))
-    message = messages[index]
-    def check(m):
-        return True
-        if message.author == m.content:
-            return True
-        return False
-    await interaction.response.send_message("Who sent this: \n" + message.content)
-    msg = await client.wait_for("message", check=check)
-    await interaction.response.send_message("YES")
+
+
+
 
 
 
@@ -61,25 +49,46 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    if message.content[0:2] != "!g":
+    args = message.content.split()
+    if len(args) == 0:
         return
-    username = str(message.author)
-    user_message = message.content
-    channel = message.channel
+    if args[0] != "!gm":
+        return
+    print(args)
+    print(len(args))
+    send_channel = message.channel
+    scan_channel = message.channel
+    if len(args) >= 2:
+        scan_channel = utils.get(client.get_all_channels(), name=args[1])
+        print("bingo")
+    else:
+         await send_channel.send("Did not specify channel! Will be guessing messages from #" + str(message.channel))
 
-    messages = [message async for message in channel.history(limit=None)]
-    print(len(messages))
+
+    await send_channel.send("Starting game...")
+    messages = [message async for message in scan_channel.history(limit=1000)]
+
+
+    #print(len(messages))
     index = random.randrange(0, len(messages))
-    message2 = messages[index]
+    message_to_guess = messages[index]
+    global correctGuesser
+    correctGuesser = message.author
     def check(m):
-        print("should be " + str(message2.author))
+        print("should be " + str(message_to_guess.author))
         print("guess " +  m.content)
-        if  m.content in str(message2.author):
-            return True
-        return False
-    await channel.send("Who sent this: \n" + message.content)
-    msg = await client.wait_for("message", check=check)
-    await channel.send("YES")
+        correctGuesser = m.author
+
+
+        return (similar(m.content.lower(), str(message_to_guess.author).lower())) > 0.7 or similar(m.content.lower(), str(message_to_guess.author.display_name).lower()) > 0.7
+    await message.channel.send("Who sent this: \n`" + message_to_guess.content +"`")
+    try:
+        msg = await client.wait_for("message", check=check, timeout=20.0)
+        await send_channel.send(str(msg.author) + " got it right! It was " + str(message_to_guess.author.display_name)  + " ("  + str(message_to_guess.author) + ")\n " + message_to_guess.jump_url)
+        await send_channel.send(message_to_guess.jump_url)
+    except asyncio.TimeoutError:
+        return await send_channel.send("Time's up! Message was sent by " + str(message_to_guess.author.display_name)  + " ("  + str(message_to_guess.author) + ")\n" + message_to_guess.jump_ur)
+    
 
 def main():
     client.run(token=TOKEN)
