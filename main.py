@@ -106,13 +106,14 @@ async def on_message(message):
         print("should be " + str(message_to_guess.channel))
         print("guess " +  m.content)
         return (similar(m.content.lower(), str(message_to_guess.channel).lower())) > 0.7
+    
     message_to_guess = pick()
 
     if args[0] == "!gm":
 
         embed = Embed(title="Who sent this?")
     if args[0] == "!gc":
-        embed = Embed(title="What channel was this?")
+        embed = Embed(title="What channel was this sent in?")
         embed.description = str(message_to_guess.author) + ": "
 
     if message_to_guess.attachments:
