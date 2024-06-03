@@ -111,6 +111,7 @@ async def on_message(message):
         msg = await client.wait_for("message", check=check, timeout=15.0)
         response_embed = Embed(title=str(msg.author) + " got it right!")
         response_embed.description = "It was " + str(message_to_guess.author.display_name)  + " ("  + str(message_to_guess.author) + ")\n\n" + message_to_guess.jump_url
+        response_embed.set_image(msg.author.avatar_url)
         await send_channel.send(embed=response_embed)
     except asyncio.TimeoutError:
         response_embed = Embed(title="Time's Up!") 
