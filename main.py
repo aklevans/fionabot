@@ -42,15 +42,25 @@ async def on_message(message):
     args = message.content.split()
     if len(args) == 0:
         return
-    if args[0] != "!gm":
+    
+    send_channel = message.channel
+
+
+    if args[0] == "!gm":
+        scan_channel = message.channel
+        if len(args) >= 2:
+            scan_channel = utils.get(client.get_all_channels(), name=args[1])
+        else:
+            await send_channel.send("Did not specify channel! Will be guessing messages from #" + str(message.channel))
+    elif args[0] == "!gc":
+        text_channel_list = []
+        for channel in message.guild.text_channels:
+            text_channel_list.append(channel)
+        scan_channel = random.choice(text_channel_list)
+    else:
         return
 
-    send_channel = message.channel
-    scan_channel = message.channel
-    if len(args) >= 2:
-        scan_channel = utils.get(client.get_all_channels(), name=args[1])
-    else:
-        await send_channel.send("Did not specify channel! Will be guessing messages from #" + str(message.channel))
+
         
     recent = False
     if "recent" in args:
@@ -73,7 +83,6 @@ async def on_message(message):
         return
 
 
-    
     if not recent:
         messages = [message async for message in scan_channel.history(limit=100, around=random_date(first_message_date, last_message_date))]
     else:
@@ -86,38 +95,58 @@ async def on_message(message):
             return pick()
         return message_to_guess
 
-    def check(m):
+    def checkAuthor(m):
         print("should be " + str(message_to_guess.author))
         print("guess " +  m.content)
         correctGuesser = m.author
 
 
         return (similar(m.content.lower(), str(message_to_guess.author).lower())) > 0.7 or similar(m.content.lower(), str(message_to_guess.author.display_name).lower()) > 0.7
-    
+    def checkChannel(m):
+        print("should be " + str(message_to_guess.channel))
+        print("guess " +  m.content)
+        return (similar(m.content.lower(), str(message_to_guess.channel).lower())) > 0.7
     message_to_guess = pick()
 
-    embed = Embed(title="Who sent this?")
+    if args[0] == "!gm":
+
+        embed = Embed(title="Who sent this?")
+    if args[0] == "!gc":
+        embed = Embed(title="What channel was this?")
+        embed.description = str(message_to_guess.author) + ": "
+
     if message_to_guess.attachments:
         embed.set_image(url=message_to_guess.attachments[0].url)
     elif message_to_guess.embeds:
-        embed.description = message_to_guess.embeds[0].description
+        embed.description += message_to_guess.embeds[0].description
         if message_to_guess.embeds[0].image:
             embed.set_image(url=message_to_guess.embeds[0].image.url)
     else:
-        embed.description = message_to_guess.content
+        embed.description += message_to_guess.content
     
     await send_channel.send(embed=embed)
     try:
-        msg = await client.wait_for("message", check=check, timeout=15.0)
+        if args[0] == "!gm":
+            msg = await client.wait_for("message", check=checkAuthor, timeout=15.0)
+        else:
+            msg = await client.wait_for("message", check=checkChannel, timeout=15.0)
+
         response_embed = Embed(title=str(msg.author) + " got it right!")
         response_embed.description = "It was " + str(message_to_guess.author.display_name)  + " ("  + str(message_to_guess.author) + ")\n\n" + message_to_guess.jump_url
+        if args[0] == "!gc":
+            response_embed.description = "It was sent in #" + str(message_to_guess.channel)  + "\n\n" + message_to_guess.jump_url
+
         response_embed.set_image(msg.author.avatar_url)
         await send_channel.send(embed=response_embed)
     except asyncio.TimeoutError:
         response_embed = Embed(title="Time's Up!") 
         response_embed.description =  "Message was sent by " + str(message_to_guess.author.display_name)  + " ("  + str(message_to_guess.author) + ")\n\n" + message_to_guess.jump_url
+        if args[0] == "!gc":
+            response_embed.description = "Message was sent in #" + str(message_to_guess.channel)
         return await send_channel.send(embed=response_embed)
-    
+
+
+
 
 def main():
     client.run(token=TOKEN)
